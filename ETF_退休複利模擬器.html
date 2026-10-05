@@ -1,0 +1,387 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>ETF 退休複利模擬器</title>
+<style>
+:root{
+  --bg:#0b0d0f; --panel:#111417; --border:#272c31; --text:#f6f7f8; --muted:#aeb5bc;
+  --green:#13d46c; --blue:#8cc9ff; --green2:#56d875; --yellow:#ffd21f;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;background:var(--bg);color:var(--text);
+  font-family:system-ui,-apple-system,"Segoe UI","Noto Sans TC",sans-serif;
+}
+.wrap{max-width:1150px;margin:auto;padding:26px 22px 48px}
+h1{font-size:30px;margin:0 0 5px}
+.sub{color:var(--muted);font-size:14px;margin-bottom:22px}
+.cards{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:0;
+  border-bottom:1px solid #20252a;margin-bottom:20px
+}
+.card{
+  text-align:center;padding:8px 12px 18px;position:relative
+}
+.card:not(:last-child):after{
+  content:"";position:absolute;right:0;top:4px;height:56px;width:1px;background:#30363c
+}
+.card .value{font-size:38px;font-weight:500;line-height:1.05}
+.card .label{margin-top:6px;color:#c9ced3;font-size:17px}
+.green{color:var(--green)}
+.panel{
+  background:var(--panel);border:1px solid var(--border);border-radius:16px;
+  padding:20px;margin-top:18px
+}
+.panel h2{font-size:22px;margin:0 0 16px}
+.chart-wrap{height:440px}
+canvas{width:100%;height:100%;display:block}
+.legend{display:flex;gap:28px;flex-wrap:wrap;justify-content:center;color:#c8ced3;margin-top:8px}
+.legend span:before{content:"";display:inline-block;width:15px;height:15px;border-radius:3px;margin-right:8px;vertical-align:-2px}
+.legend .asset:before{background:var(--blue)}
+.legend .cost:before{background:var(--green2)}
+.controls{
+  display:grid;grid-template-columns:1fr 1fr;column-gap:36px;row-gap:20px
+}
+.control label{display:block;color:#bac1c7;font-size:18px;margin-bottom:10px}
+.control-row{display:grid;grid-template-columns:1fr 120px;gap:18px;align-items:center}
+input[type="range"]{width:100%;accent-color:white}
+.outbox{
+  background:#111419;border:1px solid #30363c;border-radius:12px;
+  padding:10px 14px;text-align:right;font-size:18px;font-weight:700
+}
+.options{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+button{
+  background:#20252a;color:#fff;border:1px solid #343a40;border-radius:11px;
+  padding:10px 14px;cursor:pointer;font-weight:700
+}
+button.primary{background:#11c866;color:#07130b;border:none}
+.table-wrap{overflow:auto}
+table{width:100%;border-collapse:collapse}
+th,td{padding:11px 10px;border-bottom:1px solid #282e33;text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+th{color:#b9c0c6;font-size:13px}
+.note{font-size:13px;color:#9ea6ad;line-height:1.65;margin-top:12px}
+@media(max-width:760px){
+  .wrap{padding:18px 12px 36px}
+  .cards{grid-template-columns:1fr}
+  .card:not(:last-child):after{display:none}
+  .card{border-bottom:1px solid #24292e}
+  .controls{grid-template-columns:1fr}
+  .chart-wrap{height:340px}
+  .card .value{font-size:34px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>ETF 退休複利模擬器</h1>
+  <div class="sub">預設：32 歲、0050 每月 20,000 元、00878 / 00919 各 7,500 元，配息全部轉投入 0050。</div>
+
+  <div class="cards">
+    <div class="card">
+      <div class="value green" id="assetTop">NT$0.0M</div>
+      <div class="label" id="assetLabel">65歲法定退休總資產</div>
+    </div>
+    <div class="card">
+      <div class="value" id="costTop">NT$0.0M</div>
+      <div class="label">累積投入總本金</div>
+    </div>
+    <div class="card">
+      <div class="value green" id="profitTop">NT$0.0M</div>
+      <div class="label" id="profitLabel">65歲預估淨獲利</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>預估總資產（元）</h2>
+    <div class="chart-wrap"><canvas id="chart"></canvas></div>
+    <div class="legend">
+      <span class="asset">預估累積總資產（配息滾入0050）</span>
+      <span class="cost">累積投入總本金</span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>調整投資假設</h2>
+    <div class="controls">
+      <div class="control">
+        <label>0050 每月投入</label>
+        <div class="control-row">
+          <input id="c0050" type="range" min="0" max="50000" step="500" value="20000">
+          <div class="outbox" id="c0050o"></div>
+        </div>
+      </div>
+
+      <div class="control">
+        <label>00878 每月投入</label>
+        <div class="control-row">
+          <input id="c00878" type="range" min="0" max="30000" step="500" value="7500">
+          <div class="outbox" id="c00878o"></div>
+        </div>
+      </div>
+
+      <div class="control">
+        <label>00919 每月投入</label>
+        <div class="control-row">
+          <input id="c00919" type="range" min="0" max="30000" step="500" value="7500">
+          <div class="outbox" id="c00919o"></div>
+        </div>
+      </div>
+
+      <div class="control">
+        <label>0050 年化總報酬 (%)</label>
+        <div class="control-row">
+          <input id="r0050" type="range" min="0" max="15" step="0.1" value="8">
+          <div class="outbox" id="r0050o"></div>
+        </div>
+      </div>
+
+      <div class="control">
+        <label>00878 配息率 (%)</label>
+        <div class="control-row">
+          <input id="y00878" type="range" min="0" max="12" step="0.1" value="4.5">
+          <div class="outbox" id="y00878o"></div>
+        </div>
+      </div>
+
+      <div class="control">
+        <label>00919 配息率 (%)</label>
+        <div class="control-row">
+          <input id="y00919" type="range" min="0" max="12" step="0.1" value="5">
+          <div class="outbox" id="y00919o"></div>
+        </div>
+      </div>
+
+      <div class="control">
+        <label>目前年齡</label>
+        <div class="control-row">
+          <input id="age" type="range" min="18" max="60" step="1" value="32">
+          <div class="outbox" id="ageo"></div>
+        </div>
+      </div>
+
+      <div class="control">
+        <label>時間軸（年）</label>
+        <div class="control-row">
+          <input id="years" type="range" min="1" max="45" step="1" value="33">
+          <div class="outbox" id="yearso"></div>
+        </div>
+      </div>
+
+      <div class="control">
+        <label>00878 年化價格成長 (%)</label>
+        <div class="control-row">
+          <input id="g00878" type="range" min="-5" max="10" step="0.1" value="0">
+          <div class="outbox" id="g00878o"></div>
+        </div>
+      </div>
+
+      <div class="control">
+        <label>00919 年化價格成長 (%)</label>
+        <div class="control-row">
+          <input id="g00919" type="range" min="-5" max="10" step="0.1" value="0">
+          <div class="outbox" id="g00919o"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="options">
+      <button class="primary" onclick="setRetire()">直接設為 65 歲退休</button>
+      <button onclick="resetPreset()">恢復預設值</button>
+    </div>
+
+    <div class="note">
+      計算邏輯：每月投入三檔 ETF；00878 與 00919 的配息以月化方式估算，全部轉投入 0050。
+      0050 依「年化總報酬」複利；00878 / 00919 可另外設定價格成長率。
+      若將兩檔高股息的價格成長率設為 0%，代表只計算其配息、不假設本金價格上漲。
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>里程碑試算</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th>投資年數</th><th>年齡</th><th>投入本金</th><th>預估總資產</th><th>預估淨獲利</th><th>累積投報率</th></tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const twd = n => new Intl.NumberFormat('zh-TW',{style:'currency',currency:'TWD',maximumFractionDigits:0}).format(n);
+const mfmt = n => 'NT$' + (n/1e6).toFixed(1) + 'M';
+const monthly = annualPct => Math.pow(1 + annualPct/100, 1/12) - 1;
+
+function val(id){return parseFloat($(id).value)||0}
+
+function params(){
+  return {
+    c0:val('c0050'), c1:val('c00878'), c2:val('c00919'),
+    r0:val('r0050'), y1:val('y00878'), y2:val('y00919'),
+    g1:val('g00878'), g2:val('g00919'),
+    age:val('age'), years:val('years')
+  }
+}
+
+// 模型：高股息 ETF 配息轉投入 0050；高股息本金可有價格成長
+function simulate(years,p){
+  const months=Math.round(years*12);
+  let a=0,b=0,c=0,cost=0;
+  const mr0=monthly(p.r0), mg1=monthly(p.g1), mg2=monthly(p.g2);
+  const dy1=monthly(p.y1), dy2=monthly(p.y2);
+
+  for(let i=0;i<months;i++){
+    // 先讓既有資產跑一個月
+    a *= (1+mr0);
+    b *= (1+mg1);
+    c *= (1+mg2);
+
+    // 新投入
+    a += p.c0;
+    b += p.c1;
+    c += p.c2;
+    cost += p.c0+p.c1+p.c2;
+
+    // 高股息 ETF 產生配息，全部轉投入 0050
+    const div = b*dy1 + c*dy2;
+    a += div;
+  }
+  const total=a+b+c;
+  return {total,cost,profit:total-cost,roi:cost?((total/cost)-1)*100:0,a,b,c};
+}
+
+function updateOutputs(){
+  const p=params();
+  $('c0050o').textContent=twd(p.c0);
+  $('c00878o').textContent=twd(p.c1);
+  $('c00919o').textContent=twd(p.c2);
+  $('r0050o').textContent=p.r0.toFixed(1).replace('.0','')+'%';
+  $('y00878o').textContent=p.y1.toFixed(1).replace('.0','')+'%';
+  $('y00919o').textContent=p.y2.toFixed(1).replace('.0','')+'%';
+  $('g00878o').textContent=p.g1.toFixed(1).replace('.0','')+'%';
+  $('g00919o').textContent=p.g2.toFixed(1).replace('.0','')+'%';
+  $('ageo').textContent=p.age+' 歲';
+  $('yearso').textContent=p.years+' 年';
+
+  const r=simulate(p.years,p);
+  $('assetTop').textContent=mfmt(r.total);
+  $('costTop').textContent=mfmt(r.cost);
+  $('profitTop').textContent=mfmt(r.profit);
+  $('assetLabel').textContent=(p.age+p.years)+'歲預估總資產';
+  $('profitLabel').textContent=(p.age+p.years)+'歲預估淨獲利';
+
+  renderTable(p);
+  drawChart(p);
+}
+
+function renderTable(p){
+  const milestones=[10,15,20,p.years].filter((v,i,a)=>v>0 && a.indexOf(v)===i).sort((a,b)=>a-b);
+  $('tbody').innerHTML=milestones.map(y=>{
+    const r=simulate(y,p);
+    return `<tr>
+      <td>${y} 年</td>
+      <td>${p.age+y} 歲</td>
+      <td>${twd(r.cost)}</td>
+      <td>${twd(r.total)}</td>
+      <td>${twd(r.profit)}</td>
+      <td>${r.roi.toFixed(1)}%</td>
+    </tr>`
+  }).join('');
+}
+
+function drawChart(p){
+  const canvas=$('chart');
+  const rect=canvas.getBoundingClientRect();
+  const dpr=window.devicePixelRatio||1;
+  canvas.width=rect.width*dpr; canvas.height=rect.height*dpr;
+  const ctx=canvas.getContext('2d'); ctx.scale(dpr,dpr);
+
+  const W=rect.width,H=rect.height;
+  const pad={l:92,r:22,t:18,b:56};
+  const pts=[];
+  for(let m=0;m<=p.years*12;m+=3){
+    const y=m/12, r=simulate(y,p);
+    pts.push({x:y,asset:r.total,cost:r.cost});
+  }
+  const maxV=Math.max(1,...pts.map(d=>d.asset))*1.08;
+
+  const sx=x=>pad.l+(x/p.years)*(W-pad.l-pad.r);
+  const sy=y=>H-pad.b-(y/maxV)*(H-pad.t-pad.b);
+
+  ctx.clearRect(0,0,W,H);
+  ctx.font='13px system-ui';
+  ctx.textBaseline='middle';
+
+  // horizontal grid
+  for(let i=0;i<=5;i++){
+    const v=maxV*i/5, yy=sy(v);
+    ctx.strokeStyle='#283038';ctx.lineWidth=1;ctx.setLineDash([4,4]);
+    ctx.beginPath();ctx.moveTo(pad.l,yy);ctx.lineTo(W-pad.r,yy);ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle='#d8dde1';
+    ctx.textAlign='right';
+    ctx.fillText(v===0?'NT$0':'NT$'+(v/1e6).toFixed(1)+'M',pad.l-12,yy);
+  }
+
+  // x ticks
+  const step=p.years<=20?2:p.years<=35?4:5;
+  ctx.textAlign='center';ctx.fillStyle='#d8dde1';
+  for(let yr=0;yr<=p.years;yr+=step){
+    const xx=sx(yr);
+    ctx.strokeStyle='#555d65';ctx.beginPath();ctx.moveTo(xx,H-pad.b);ctx.lineTo(xx,H-pad.b+5);ctx.stroke();
+    ctx.fillText(String(yr),xx,H-pad.b+20);
+  }
+  if(p.years%step!==0){
+    const xx=sx(p.years);
+    ctx.fillText(String(p.years),xx,H-pad.b+20);
+  }
+
+  // axis titles
+  ctx.fillStyle='#fff';ctx.font='bold 16px system-ui';ctx.textAlign='center';
+  ctx.fillText('投資年數 (年)',(pad.l+W-pad.r)/2,H-12);
+
+  // area under asset
+  ctx.beginPath();
+  pts.forEach((d,i)=>{const xx=sx(d.x),yy=sy(d.asset); i?ctx.lineTo(xx,yy):ctx.moveTo(xx,yy)});
+  ctx.lineTo(sx(p.years),sy(0));ctx.lineTo(sx(0),sy(0));ctx.closePath();
+  const grd=ctx.createLinearGradient(0,pad.t,0,H-pad.b);
+  grd.addColorStop(0,'rgba(140,201,255,.30)');
+  grd.addColorStop(1,'rgba(140,201,255,.12)');
+  ctx.fillStyle=grd;ctx.fill();
+
+  // asset line
+  ctx.beginPath();
+  pts.forEach((d,i)=>{const xx=sx(d.x),yy=sy(d.asset); i?ctx.lineTo(xx,yy):ctx.moveTo(xx,yy)});
+  ctx.strokeStyle='#8cc9ff';ctx.lineWidth=2.5;ctx.stroke();
+
+  // cost line
+  ctx.beginPath();
+  pts.forEach((d,i)=>{const xx=sx(d.x),yy=sy(d.cost); i?ctx.lineTo(xx,yy):ctx.moveTo(xx,yy)});
+  ctx.strokeStyle='#56d875';ctx.lineWidth=2.5;ctx.stroke();
+}
+
+function setRetire(){
+  const age=val('age');
+  $('years').value=Math.max(1,65-age);
+  updateOutputs();
+}
+function resetPreset(){
+  $('c0050').value=20000;$('c00878').value=7500;$('c00919').value=7500;
+  $('r0050').value=8;$('y00878').value=4.5;$('y00919').value=5;
+  $('g00878').value=0;$('g00919').value=0;
+  $('age').value=32;$('years').value=33;
+  updateOutputs();
+}
+
+document.querySelectorAll('input[type=range]').forEach(el=>el.addEventListener('input',updateOutputs));
+window.addEventListener('resize',()=>drawChart(params()));
+updateOutputs();
+</script>
+</body>
+</html>
